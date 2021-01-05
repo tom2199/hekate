@@ -747,7 +747,7 @@ static void parse_external_kip_patches()
 
 	u32 curr_kip_idx = 0;
 	char path[64];
-	strcpy(path, "bootloader/patches.ini");
+	strcpy(path, "bootloader/fspatch.ini");
 
 	LIST_INIT(ini_kip_sections);
 	if (ini_patch_parse(&ini_kip_sections, path))
