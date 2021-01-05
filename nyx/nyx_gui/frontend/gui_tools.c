@@ -293,7 +293,13 @@ static lv_res_t _create_mbox_ums(usb_ctxt_t *usbs)
 	lv_obj_align(mbox, NULL, LV_ALIGN_CENTER, 0, 0);
 	lv_obj_set_top(mbox, true);
 
+	// Dim backlight.
+	display_backlight_brightness(20, 1000);
+
 	usb_device_gadget_ums(usbs);
+
+	// Restore backlight.
+	display_backlight_brightness(h_cfg.backlight - 20, 1000);
 
 	lv_mbox_add_btns(mbox, mbox_btn_map2, mbox_action);
 
@@ -1186,6 +1192,8 @@ static lv_res_t _create_window_dump_pk12_tool(lv_obj_t *btn)
 		if (!pkg1_decrypt(pkg1_id, pkg1))
 		{
 			strcat(txt_buf, "#FFDD00 Pkg1 decryption failed!#\n");
+			if (h_cfg.t210b01)
+				strcat(txt_buf, "#FFDD00 Is BEK missing?#\n");
 			lv_label_set_text(lb_desc, txt_buf);
 			goto out_free;
 		}

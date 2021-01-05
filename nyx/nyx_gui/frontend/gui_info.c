@@ -31,6 +31,9 @@
 #include <power/bm92t36.h>
 #include <power/bq24193.h>
 #include <power/max17050.h>
+#include <power/max77620.h>
+#include <power/max7762x.h>
+#include <power/max77812.h>
 #include <sec/se.h>
 #include <sec/tsec.h>
 #include <soc/fuse.h>
@@ -207,9 +210,9 @@ static lv_res_t _fuse_dump_window_action(lv_obj_t * btn)
 		}
 		else
 		{
-			emmcsn_path_impl(path, "/dumps", "fuse_cached_t210b01_part0.bin", NULL);
+			emmcsn_path_impl(path, "/dumps", "fuse_cached_t210b01_x898.bin", NULL);
 			error = sd_save_to_file((u8 *)0x7000F898, 0x68, path);
-			emmcsn_path_impl(path, "/dumps", "fuse_cached_t210b01_part1.bin", NULL);
+			emmcsn_path_impl(path, "/dumps", "fuse_cached_t210b01_x900.bin", NULL);
 			if (!error)
 				error = sd_save_to_file((u8 *)0x7000F900, 0x300, path);
 		}
@@ -529,10 +532,10 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 	lv_label_set_style(lb_desc, &monospace_text);
 
 	lv_label_set_static_text(lb_desc,
-		"#00DDFF Detailed Info:#\n"
 		"SKU:\n"
 		"DRAM ID:\n"
 		"#FF8000 Burnt Fuses (ODM 7/6):#\n"
+		"ODM Fields (4, 6, 7):\n"
 		"Secure Boot key (SBK):\n"
 		"Device key (DK):\n"
 		"USB Stack:\n"
@@ -555,8 +558,7 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		"Wafer ID:\n"
 		"X Coordinate:\n"
 		"Y Coordinate:\n"
-		"#FF8000 Chip ID Revision:#\n"
-		"ODM Fields (4, 6, 7):"
+		"#FF8000 Chip ID Revision:#"
 	);
 	lv_obj_set_width(lb_desc, lv_obj_get_width(desc));
 
@@ -585,7 +587,7 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		sku = "Hoag (Mariko)";
 		break;
 	default:
-		sku = "Unknown";
+		sku = "#FF8000 Unknown#";
 		break;
 	}
 
@@ -635,11 +637,11 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		break;
 	case LPDDR4X_IOWA_4GB_SAMSUNG_1Y_X:
 	case LPDDR4X_HOAG_4GB_SAMSUNG_1Y_X:
-	case LPDDR4X_SDS_4GB_SAMSUNG_1Y_X:
+	case LPDDR4X_AULA_4GB_SAMSUNG_1Y_X:
 		strcpy(dram_man, "Samsung 1y X 4GB");
 		break;
 	case LPDDR4X_IOWA_8GB_SAMSUNG_1Y_X:
-	case LPDDR4X_SDS_8GB_SAMSUNG_1Y_X:
+	case LPDDR4X_AULA_8GB_SAMSUNG_1Y_X:
 		strcpy(dram_man, "Samsung 1y X 8GB");
 		break;
 	case LPDDR4X_IOWA_4GB_SAMSUNG_1Y_Y:
@@ -648,16 +650,16 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 	case LPDDR4X_IOWA_8GB_SAMSUNG_1Y_Y:
 		strcpy(dram_man, "Samsung 1y Y 8GB");
 		break;
-	case LPDDR4X_SDS_4GB_SAMSUNG_1Y_A:
+	case LPDDR4X_AULA_4GB_SAMSUNG_1Y_A:
 		strcpy(dram_man, "Samsung 1y A 4GB");
 		break;
 	case LPDDR4X_IOWA_4GB_MICRON_1Y_A:
 	case LPDDR4X_HOAG_4GB_MICRON_1Y_A:
-	case LPDDR4X_SDS_4GB_MICRON_1Y_A:
+	case LPDDR4X_AULA_4GB_MICRON_1Y_A:
 		strcpy(dram_man, "Micron 1y A 4GB");
 		break;
 	default:
-		strcpy(dram_man, "Unknown");
+		strcpy(dram_man, "#FF8000 Unknown#");
 		break;
 	}
 
@@ -728,13 +730,13 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 	u32 chip_id = APB_MISC(APB_MISC_GP_HIDREV);
 	// Parse fuses and display them.
 	s_printf(txt_buf,
-		"\n%X - %s - %s\n%02d: %s\n%d - %d (HOS: %s)\n%08X%08X%08X%08X\n%08X\n"
+		"%X - %s - %s\n%02d: %s\n%d - %d (HOS: %s)\n%08X %08X %08X\n%08X%08X%08X%08X\n%08X\n"
 		"%s\n%d.%02d (0x%X)\n%d.%02d (0x%X)\n%d\n%d\n%d\n%d\n%d\n0x%X\n%d\n%d\n%d\n%d\n"
 		"%d\n%d\n%d (0x%X)\n%d\n%d\n%d\n%d\n"
-		"ID: %02X, Major: A0%d, Minor: %d\n"
-		"%08X %08X %08X",
+		"ID: %02X, Major: A0%d, Minor: %d",
 		FUSE(FUSE_SKU_INFO), sku, fuse_read_hw_state() ? "Dev" : "Retail",
 		dram_id, dram_man, burnt_fuses_7, burnt_fuses_6, fuses_hos_version,
+		fuse_read_odm(4), fuse_read_odm(6), fuse_read_odm(7),
 		byte_swap_32(FUSE(FUSE_PRIVATE_KEY0)), byte_swap_32(FUSE(FUSE_PRIVATE_KEY1)),
 		byte_swap_32(FUSE(FUSE_PRIVATE_KEY2)), byte_swap_32(FUSE(FUSE_PRIVATE_KEY3)),
 		byte_swap_32(FUSE(FUSE_PRIVATE_KEY4)),
@@ -747,8 +749,7 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		FUSE(FUSE_CPU_IDDQ_CALIB), FUSE(FUSE_SOC_IDDQ_CALIB), FUSE(FUSE_GPU_IDDQ_CALIB),
 		FUSE(FUSE_OPT_VENDOR_CODE), FUSE(FUSE_OPT_FAB_CODE), lot_bin, FUSE(FUSE_OPT_LOT_CODE_0),
 		FUSE(FUSE_OPT_LOT_CODE_1), FUSE(FUSE_OPT_WAFER_ID), FUSE(FUSE_OPT_X_COORDINATE), FUSE(FUSE_OPT_Y_COORDINATE),
-		(chip_id >> 8) & 0xFF, (chip_id >> 4) & 0xF, (chip_id >> 16) & 0xF,
-		fuse_read_odm(4), fuse_read_odm(6), fuse_read_odm(7));
+		(chip_id >> 8) & 0xFF, (chip_id >> 4) & 0xF, (chip_id >> 16) & 0xF);
 
 	lv_label_set_text(lb_val, txt_buf);
 
@@ -783,10 +784,10 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		strcat(txt_buf, "Micron");
 		break;
 	default:
-		strcat(txt_buf, "Unknown");
+		s_printf(txt_buf + strlen(txt_buf), "#FF8000 Unknown# (%d)", ram_vendor.rank0_ch0);
 		break;
 	}
-	s_printf(txt_buf + strlen(txt_buf), " (%d) #FF8000 |# ", ram_vendor.rank0_ch0);
+	strcat(txt_buf, " #FF8000 |# ");
 	switch (ram_vendor.rank0_ch1)
 	{
 	case 1:
@@ -799,12 +800,11 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		strcat(txt_buf, "Micron");
 		break;
 	default:
-		strcat(txt_buf, "Unknown");
+		s_printf(txt_buf + strlen(txt_buf), "#FF8000 Unknown# (%d)", ram_vendor.rank0_ch1);
 		break;
 	}
-	s_printf(txt_buf + strlen(txt_buf), " (%d)\n#FF8000 Rev ID:#  %X.%02X #FF8000 |# %X.%02X\n#FF8000 Density:# %d",
-		ram_vendor.rank0_ch1, ram_rev0.rank0_ch0, ram_rev1.rank0_ch0, ram_rev0.rank0_ch1, ram_rev1.rank0_ch1,
-		die_channels);
+	s_printf(txt_buf + strlen(txt_buf), "\n#FF8000 Rev ID:#  %X.%02X #FF8000 |# %X.%02X\n#FF8000 Density:# %d",
+		ram_rev0.rank0_ch0, ram_rev1.rank0_ch0, ram_rev0.rank0_ch1, ram_rev1.rank0_ch1, die_channels);
 	switch ((ram_density.rank0_ch0 & 0x3C) >> 2)
 	{
 	case 2:
@@ -817,10 +817,10 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		strcat(txt_buf, " x 1GB");
 		break;
 	default:
-		strcat(txt_buf, " x Unk");
+		s_printf(txt_buf + strlen(txt_buf), " x Unk (%d)", (ram_density.rank0_ch0 & 0x3C) >> 2);
 		break;
 	}
-	s_printf(txt_buf + strlen(txt_buf), " (%d) #FF8000 |# %d", (ram_density.rank0_ch0 & 0x3C) >> 2, die_channels);
+	s_printf(txt_buf + strlen(txt_buf), " #FF8000 |# %d", die_channels);
 	switch ((ram_density.rank0_ch1 & 0x3C) >> 2)
 	{
 	case 2:
@@ -833,10 +833,10 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		strcat(txt_buf, " x 1GB");
 		break;
 	default:
-		strcat(txt_buf, " x Unk");
+		s_printf(txt_buf + strlen(txt_buf), " x Unk (%d)", (ram_density.rank0_ch1 & 0x3C) >> 2);
 		break;
 	}
-	s_printf(txt_buf + strlen(txt_buf), " (%d)\n\n", (ram_density.rank0_ch1 & 0x3C) >> 2);
+	strcat(txt_buf, "\n\n");
 
 	// Display info.
 	u8  display_rev = (nyx_str->info.disp_id >> 8) & 0xFF;
@@ -853,35 +853,35 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		strcat(txt_buf, "JDI LPM062M326A");
 		break;
 	case PANEL_INL_P062CCA_AZ1:
-		strcat(txt_buf, "InnoLux P062CCA-AZ");
+		strcat(txt_buf, "InnoLux P062CCA");
 		switch (display_rev)
 		{
 		case 0x93:
-			strcat(txt_buf, "1");
+			strcat(txt_buf, "-AZ1");
 			break;
 		case 0x95:
-			strcat(txt_buf, "2");
+			strcat(txt_buf, "-AZ2");
 			break;
 		case 0x96:
-			strcat(txt_buf, "3");
+			strcat(txt_buf, "-AZ3");
 			break;
 		default:
-			strcat(txt_buf, "X #FFDD00 Contact me!#");
+			strcat(txt_buf, " #FFDD00 Contact me!#");
 			break;
 		}
 		break;
 	case PANEL_AUO_A062TAN01:
-		strcat(txt_buf, "AUO A062TAN0");
+		strcat(txt_buf, "AUO A062");
 		switch (display_rev)
 		{
 		case 0x94:
-			strcat(txt_buf, "1");
+			strcat(txt_buf, "TAN01");
 			break;
 		case 0x95:
-			strcat(txt_buf, "2");
+			strcat(txt_buf, "TAN02");
 			break;
 		default:
-			strcat(txt_buf, "X #FFDD00 Contact me!#");
+			strcat(txt_buf, " #FFDD00 Contact me!#");
 			break;
 		}
 		break;
@@ -912,37 +912,65 @@ static lv_res_t _create_window_fuses_info_status(lv_obj_t *btn)
 		nyx_str->info.disp_id & 0xFF, (nyx_str->info.disp_id >> 8) & 0xFF, (nyx_str->info.disp_id >> 16) & 0xFF);
 
 	touch_fw_info_t touch_fw;
+	touch_panel_info_t *touch_panel;
+	bool panel_ic_paired = false;
 
 	if (!touch_get_fw_info(&touch_fw))
 	{
 		strcat(txt_buf, "\n\n#00DDFF Touch Panel:#\n#FF8000 Model:# ");
+
+		touch_panel = touch_get_panel_vendor();
+		if (touch_panel)
+			strcat(txt_buf, touch_panel->vendor);
+		else
+			strcat(txt_buf, "Unknown #FFDD00 Contact me!#");
+
+		s_printf(txt_buf + strlen(txt_buf), "\n#FF8000 ID:# %08X (", touch_fw.fw_id);
+
 		switch (touch_fw.fw_id)
 		{
-		case 0x100100:
-			strcat(txt_buf, "NTD 4CD 1601");
+		case 0x00100100:
+			strcat(txt_buf, "4CD 1601");
+			if (touch_panel)
+				panel_ic_paired = touch_panel->idx == -1;
 			break;
 		case 0x00120100:
 		case 0x32000001:
-			strcat(txt_buf, "NTD 4CD 1801");
+			strcat(txt_buf, "4CD 1801");
+			if (touch_panel)
+				panel_ic_paired = touch_panel->idx == 0;
 			break;
 		case 0x001A0300:
 		case 0x32000102:
-			strcat(txt_buf, "NTD 4CD 2602");
+			strcat(txt_buf, "4CD 2602");
+			if (touch_panel)
+				panel_ic_paired = touch_panel->idx == 1;
 			break;
 		case 0x00290100:
 		case 0x32000302:
-			strcat(txt_buf, "NTD 4CD 3801");
+			strcat(txt_buf, "4CD 3801");
+			if (touch_panel)
+				panel_ic_paired = touch_panel->idx == 2;
 			break;
 		case 0x31051820:
 		case 0x32000402:
-			strcat(txt_buf, "NTD 4CD XXXX");
+			strcat(txt_buf, "4CD XXXX");
+			if (touch_panel)
+				panel_ic_paired = touch_panel->idx == 3;
+			break;
+		case 0x32000501:
+		case 0x33000502:
+			strcat(txt_buf, "4CD UNKN");
+			if (touch_panel)
+				panel_ic_paired = touch_panel->idx == 4;
 			break;
 		default:
-			strcat(txt_buf, "Unknown");
+			strcat(txt_buf, "#FF8000 Unknown#");
+			break;
 		}
 
-		s_printf(txt_buf + strlen(txt_buf), "\n#FF8000 ID:# %X\n#FF8000 FTB ver:# %04X\n#FF8000 FW rev:# %04X",
-			touch_fw.fw_id, touch_fw.ftb_ver, touch_fw.fw_rev);
+		s_printf(txt_buf + strlen(txt_buf), " - %s)\n#FF8000 FTB ver:# %04X\n#FF8000 FW rev:# %04X",
+			panel_ic_paired ? "Paired" : "#FFDD00 Error#", touch_fw.ftb_ver, touch_fw.fw_rev);
 	}
 
 	// Check if patched unit.
@@ -1404,7 +1432,7 @@ static lv_res_t _create_window_emmc_info_status(lv_obj_t *btn)
 			rsvd_blocks = "Urgent (> 90%)";
 			break;
 		default:
-			rsvd_blocks = "Unknown";
+			rsvd_blocks = "#FF8000 Unknown#";
 			break;
 		}
 
@@ -1779,7 +1807,6 @@ static lv_res_t _create_window_battery_status(lv_obj_t *btn)
 	lv_label_set_static_text(lb_desc,
 		"#00DDFF Fuel Gauge IC Info:#\n"
 		"Capacity now:\n"
-		"Capacity now:\n"
 		"Capacity full:\n"
 		"Capacity (design):\n"
 		"Current now:\n"
@@ -1790,6 +1817,9 @@ static lv_res_t _create_window_battery_status(lv_obj_t *btn)
 		"Max voltage reached:\n"
 		"Empty voltage:\n"
 		"Battery temp:\n\n"
+		"#00DDFF PMIC IC Info:#\n"
+		"Main PMIC:\n\n"
+		"CPU/GPU PMIC:\n"
 	);
 	lv_obj_set_width(lb_desc, lv_obj_get_width(desc));
 
@@ -1800,12 +1830,11 @@ static lv_res_t _create_window_battery_status(lv_obj_t *btn)
 
 	char *txt_buf = (char *)malloc(0x4000);
 	int value = 0;
+	int cap_pct = 0;
 
-	max17050_get_property(MAX17050_RepSOC, &value);
-	s_printf(txt_buf, "\n%d %\n", value >> 8);
-
+	max17050_get_property(MAX17050_RepSOC, &cap_pct);
 	max17050_get_property(MAX17050_RepCap, &value);
-	s_printf(txt_buf + strlen(txt_buf), "%d mAh\n", value);
+	s_printf(txt_buf, "\n%d mAh [%d %]\n", value, cap_pct >> 8);
 
 	max17050_get_property(MAX17050_FullCAP, &value);
 	s_printf(txt_buf + strlen(txt_buf), "%d mAh\n", value);
@@ -1844,9 +1873,36 @@ static lv_res_t _create_window_battery_status(lv_obj_t *btn)
 
 	max17050_get_property(MAX17050_TEMP, &value);
 	if (value >= 0)
-		s_printf(txt_buf + strlen(txt_buf), "%d.%d oC\n", value / 10, value % 10);
+		s_printf(txt_buf + strlen(txt_buf), "%d.%d oC\n\n\n", value / 10, value % 10);
 	else
-		s_printf(txt_buf + strlen(txt_buf), "-%d.%d oC\n", (~value + 1) / 10, (~value + 1) % 10);
+		s_printf(txt_buf + strlen(txt_buf), "-%d.%d oC\n\n\n", (~value + 1) / 10, (~value + 1) % 10);
+
+	value = i2c_recv_byte(I2C_5, MAX77620_I2C_ADDR, MAX77620_REG_CID4);
+	u32 main_pmic_version = i2c_recv_byte(I2C_5, MAX77620_I2C_ADDR, MAX77620_REG_CID3) & 0xF;
+
+	if (value == 0x35)
+		s_printf(txt_buf + strlen(txt_buf), "max77620 v%d\nErista OTP\n", main_pmic_version);
+	else if (value == 0x53)
+		s_printf(txt_buf + strlen(txt_buf), "max77620 v%d\nMariko OTP\n", main_pmic_version);
+	else
+		s_printf(txt_buf + strlen(txt_buf), "max77620 v%d\n#FF8000 Unknown OTP# (%02X)\n", main_pmic_version, value);
+
+	u32 cpu_gpu_pmic_type = h_cfg.t210b01 ? (FUSE(FUSE_RESERVED_ODM28_T210B01) & 1) + 1 : 0;
+	switch (cpu_gpu_pmic_type)
+	{
+	case 0:
+		s_printf(txt_buf + strlen(txt_buf), "max77621 v%d",
+			i2c_recv_byte(I2C_5, MAX77621_CPU_I2C_ADDR, MAX77621_CHIPID1_REG));
+		break;
+	case 1:
+		s_printf(txt_buf + strlen(txt_buf), "max77812-2 v%d",
+			i2c_recv_byte(I2C_5, MAX77812_PHASE31_CPU_I2C_ADDR, MAX77812_REG_VERSION) & 7);
+		break;
+	case 2:
+		s_printf(txt_buf + strlen(txt_buf), "max77812-3 v%d.0",
+			i2c_recv_byte(I2C_5, MAX77812_PHASE211_CPU_I2C_ADDR, MAX77812_REG_VERSION) & 7);
+		break;
+	}
 
 	lv_label_set_text(lb_val, txt_buf);
 

@@ -1430,12 +1430,12 @@ void *sdram_get_params_t210b01()
 	case LPDDR4X_HOAG_4GB_SAMSUNG_1Y_X:
 	case LPDDR4X_IOWA_4GB_SAMSUNG_1Y_Y:
 	case LPDDR4X_IOWA_8GB_SAMSUNG_1Y_Y:
-	case LPDDR4X_SDS_4GB_SAMSUNG_1Y_A:
-	case LPDDR4X_SDS_8GB_SAMSUNG_1Y_X:
-	case LPDDR4X_SDS_4GB_SAMSUNG_1Y_X:
+	case LPDDR4X_AULA_4GB_SAMSUNG_1Y_A:
+	case LPDDR4X_AULA_8GB_SAMSUNG_1Y_X:
+	case LPDDR4X_AULA_4GB_SAMSUNG_1Y_X:
 	case LPDDR4X_IOWA_4GB_MICRON_1Y_A:
 	case LPDDR4X_HOAG_4GB_MICRON_1Y_A:
-	case LPDDR4X_SDS_4GB_MICRON_1Y_A:
+	case LPDDR4X_AULA_4GB_MICRON_1Y_A:
 		_sdram_patch_model_params_t210b01(dramid, (u32 *)buf);
 		break;
 	}
@@ -1485,7 +1485,7 @@ static void _sdram_init_t210()
 	const sdram_params_t210_t *params = (const sdram_params_t210_t *)_sdram_get_params_t210();
 
 	// Set DRAM voltage.
-	max77620_regulator_set_voltage(REGULATOR_SD1, 1100000);
+	max7762x_regulator_set_voltage(REGULATOR_SD1, 1100000);
 
 	// VDDP Select.
 	PMC(APBDEV_PMC_VDDP_SEL) = params->pmc_vddp_sel;
@@ -1530,8 +1530,8 @@ static void _sdram_init_t210b01()
 
 void sdram_init()
 {
-	// Configure SD regulator for DRAM.
-	i2c_send_byte(I2C_5, MAX77620_I2C_ADDR, MAX77620_REG_SD_CFG2, 0x05);
+	// Disable remote sense for SD1.
+	i2c_send_byte(I2C_5, MAX77620_I2C_ADDR, MAX77620_REG_SD_CFG2, MAX77620_SD_CNF2_ROVS_EN_SD0 | MAX77620_SD_CNF2_RSVD);
 
 	if (hw_get_chip_id() == GP_HIDREV_MAJOR_T210)
 		_sdram_init_t210();
