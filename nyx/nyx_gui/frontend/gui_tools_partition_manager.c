@@ -134,7 +134,12 @@ static int _backup_and_restore_files(char *path, u32 *total_files, u32 *total_si
 
 			// Check for overflow.
 			if ((file_size + *total_size) < *total_size)
+			{
+				// Set size to > 1GB, skip next folders and return.
+				*total_size = 0x80000000;
+				res = -1;
 				break;
+			}
 
 			*total_size += file_size;
 			*total_files += 1;
@@ -177,7 +182,11 @@ static int _backup_and_restore_files(char *path, u32 *total_files, u32 *total_si
 
 			// If total is > 1GB exit.
 			if (*total_size > (RAM_DISK_SZ - 0x1000000)) // 0x2400000.
+			{
+				// Skip next folders and return.
+				res = -1;
 				break;
+			}
 		}
 		else // It's a directory.
 		{
@@ -411,7 +420,7 @@ static void _prepare_and_flash_mbr_gpt()
 		gpt_idx++;
 
 		// Android Userdata partition.
-		u32 user_size = (part_info.and_size << 11) - 0x798000 - curr_part_lba; // Subtract the other partitions (3888MB).
+		u32 user_size = (part_info.and_size << 11) - 0x798000; // Subtract the other partitions (3888MB).
 		if (!part_info.emu_size)
 			user_size -= 0x800; // Reserve 1MB.
 		memcpy(gpt.entries[gpt_idx].type_guid, android_part_guid, 16);
@@ -1616,7 +1625,7 @@ static lv_res_t _create_mbox_partitioning_next(lv_obj_t *btn)
 	lv_obj_t *lbl_status = lv_label_create(mbox, NULL);
 	lv_label_set_recolor(lbl_status, true);
 
-	s_printf(txt_buf, "#FFDD00 Warning: This will partition your SD Card!#\n\n");
+	s_printf(txt_buf, "#FFDD00 Warning: This will partition the SD Card!#\n\n");
 
 	if (part_info.backup_possible)
 		strcat(txt_buf, "#C7EA46 Your files will be backed up and restored!#\n#FFDD00Any other partition will be wiped!#");
@@ -1858,15 +1867,15 @@ static void create_mbox_check_files_total_size()
 	path[0] = 0;
 
 	// Check total size of files.
-	_backup_and_restore_files(path, &total_files, &total_size, NULL, NULL, NULL);
+	int res = _backup_and_restore_files(path, &total_files, &total_size, NULL, NULL, NULL);
 
 	// Not more than 1.0GB.
-	part_info.backup_possible = !(total_size > (RAM_DISK_SZ - 0x1000000)); // 0x2400000
+	part_info.backup_possible = !res && !(total_size > (RAM_DISK_SZ - 0x1000000)); // 0x2400000
 
 	if (part_info.backup_possible)
 	{
 		s_printf(txt_buf,
-			"#96FF00 Your SD Card files will be backed up automatically!#\n"
+			"#96FF00 The SD Card files will be backed up automatically!#\n"
 			"#FFDD00 Any other partition will be wiped!#\n"
 			"#00DDFF Total files:# %d, #00DDFF Total size:# %d MiB", total_files, total_size >> 20);
 		lv_mbox_set_text(mbox, txt_buf);
@@ -1874,7 +1883,7 @@ static void create_mbox_check_files_total_size()
 	else
 	{
 		lv_mbox_set_text(mbox,
-			"#FFDD00 Your SD Card cannot be backed up!#\n\n"
+			"#FFDD00 The SD Card cannot be backed up!#\n\n"
 			"You will be asked to back up your files later via UMS.");
 	}
 
@@ -2378,7 +2387,7 @@ lv_res_t create_window_partition_manager(lv_obj_t *btn)
 	lv_obj_align(btn1, h1, LV_ALIGN_IN_TOP_LEFT, 0, LV_DPI * 5);
 	lv_btn_set_action(btn1, LV_BTN_ACTION_CLICK, _action_part_manager_ums_sd);
 
-	lv_obj_t *btn_flash_l4t = lv_btn_create(h1, NULL);
+	btn_flash_l4t = lv_btn_create(h1, NULL);
 	lv_obj_t *label_btn2 = lv_label_create(btn_flash_l4t, NULL);
 	lv_btn_set_fit(btn_flash_l4t, true, true);
 	lv_label_set_static_text(label_btn2, SYMBOL_DOWNLOAD"  Flash Linux");

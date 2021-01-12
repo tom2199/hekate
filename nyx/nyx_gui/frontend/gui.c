@@ -36,6 +36,7 @@
 #include <mem/minerva.h>
 #include <power/bq24193.h>
 #include <power/max17050.h>
+#include <power/regulator_5v.h>
 #include <rtc/max77620-rtc.h>
 #include <soc/bpmp.h>
 #include <soc/fuse.h>
@@ -765,7 +766,7 @@ static void nyx_sd_card_issues(void *param)
 
 	lv_mbox_set_text(mbox,
 		"#FF8000 SD Card Issues Check#\n\n"
-		"#FFDD00 Your SD Card is initialized in 1-bit mode!#\n"
+		"#FFDD00 The SD Card is initialized in 1-bit mode!#\n"
 		"#FFDD00 This might mean detached or broken connector!#\n\n"
 		"You might want to check\n#C7EA46 Console Info# -> #C7EA46 SD Card#");
 
@@ -1263,8 +1264,14 @@ static void _update_status_bar(void *params)
 	else
 		strcat(label, "#FF3C28 "SYMBOL_BATTERY_EMPTY"#");
 
+	// Set charging symbol and regulator 5V source based on USB state.
 	if (charge_status)
+	{
 		strcat(label, " #FFDD00 "SYMBOL_CHARGE"#");
+		regulator_5v_batt_src_enable(false);
+	}
+	else
+		regulator_5v_batt_src_enable(true);
 
 	lv_label_set_text(status_bar.battery, label);
 	lv_obj_realign(status_bar.battery);
@@ -2000,7 +2007,7 @@ void nyx_check_ini_changes()
 
 		lv_mbox_set_text(mbox,
 			"#FF8000 Main configuration#\n\n"
-			"You changed your configuration!\n\n"
+			"You changed the configuration!\n\n"
 			"Do you want to save it?");
 
 		lv_mbox_add_btns(mbox, mbox_btn_map, _create_mbox_save_changes_action);
