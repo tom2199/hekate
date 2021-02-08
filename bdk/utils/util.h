@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 naehrwert
- * Copyright (c) 2018-2020 CTCaer
+ * Copyright (c) 2018-2021 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -35,9 +35,10 @@ typedef enum
 
 typedef enum
 {
-	NYX_CFG_BIS  = BIT(5),
 	NYX_CFG_UMS  = BIT(6),
-	NYX_CFG_DUMP = BIT(7),
+	NYX_CFG_SEPT = BIT(7),
+
+	NYX_CFG_EXTRA = 0xFF << 24
 } nyx_cfg_t;
 
 typedef enum
@@ -52,6 +53,8 @@ typedef enum
 
 #define byte_swap_32(num) ((((num) >> 24) & 0xff) | (((num) << 8) & 0xff0000) | \
 						(((num) >> 8 )& 0xff00) | (((num) << 24) & 0xff000000))
+
+#define byte_swap_16(num) ((((num) >> 8) & 0xff) | (((num) << 8) & 0xff00))
 
 typedef struct _cfg_op_t
 {

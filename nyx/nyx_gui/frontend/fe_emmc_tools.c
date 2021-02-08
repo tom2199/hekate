@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 naehrwert
  * Copyright (c) 2018 Rajko Stojadinovic
- * Copyright (c) 2018-2020 CTCaer
+ * Copyright (c) 2018-2021 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -41,7 +41,6 @@
 #define NUM_SECTORS_PER_ITER 8192 // 4MB Cache.
 #define OUT_FILENAME_SZ 128
 #define HASH_FILENAME_SZ (OUT_FILENAME_SZ + 11) // 11 == strlen(".sha256sums")
-#define SHA256_SZ 0x20
 
 extern nyx_config n_cfg;
 
@@ -156,8 +155,8 @@ static int _dump_emmc_verify(emmc_tool_gui_t *gui, sdmmc_storage_t *storage, u32
 	const char hexa[] = "0123456789abcdef";
 	DWORD *clmt = NULL;
 
-	u8 hashEm[SHA256_SZ];
-	u8 hashSd[SHA256_SZ];
+	u8 hashEm[SE_SHA_256_SIZE];
+	u8 hashSd[SE_SHA_256_SIZE];
 
 	if (f_open(&fp, outFilename, FA_READ) == FR_OK)
 	{
@@ -254,7 +253,7 @@ static int _dump_emmc_verify(emmc_tool_gui_t *gui, sdmmc_storage_t *storage, u32
 				manual_system_maintenance(false);
 				se_calc_sha256_finalize(hashEm, NULL);
 				se_calc_sha256_oneshot(hashSd, bufSd, num << 9);
-				res = memcmp(hashEm, hashSd, 0x10);
+				res = memcmp(hashEm, hashSd, SE_SHA_256_SIZE / 2);
 
 				if (res)
 				{
@@ -276,14 +275,14 @@ static int _dump_emmc_verify(emmc_tool_gui_t *gui, sdmmc_storage_t *storage, u32
 				if (n_cfg.verification == 3)
 				{
 					// Transform computed hash to readable hexadecimal
-					char hashStr[SHA256_SZ * 2 + 1];
+					char hashStr[SE_SHA_256_SIZE * 2 + 1];
 					char *hashStrPtr = hashStr;
-					for (int i = 0; i < SHA256_SZ; i++)
+					for (int i = 0; i < SE_SHA_256_SIZE; i++)
 					{
 						*(hashStrPtr++) = hexa[hashSd[i] >> 4];
 						*(hashStrPtr++) = hexa[hashSd[i] & 0x0F];
 					}
-					hashStr[SHA256_SZ * 2] = '\0';
+					hashStr[SE_SHA_256_SIZE * 2] = '\0';
 
 					f_puts(hashStr, &hashFp);
 					f_puts("\n", &hashFp);
@@ -771,9 +770,7 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 	// Get SD Card free space for Partial Backup.
 	f_getfree("", &sd_fs.free_clst, NULL);
 
-	sdmmc_storage_t storage;
-	sdmmc_t sdmmc;
-	if (!sdmmc_storage_init_mmc(&storage, &sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
+	if (!sdmmc_storage_init_mmc(&emmc_storage, &emmc_sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
 	{
 		lv_label_set_text(gui->label_info, "#FFDD00 Failed to init eMMC!#");
 		goto out;
@@ -782,16 +779,16 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 	int i = 0;
 	char sdPath[OUT_FILENAME_SZ];
 	// Create Restore folders, if they do not exist.
-	emmcsn_path_impl(sdPath, "/restore", "", &storage);
-	emmcsn_path_impl(sdPath, "/restore/partitions", "", &storage);
-	emmcsn_path_impl(sdPath, "", "", &storage);
+	emmcsn_path_impl(sdPath, "/restore", "", &emmc_storage);
+	emmcsn_path_impl(sdPath, "/restore/partitions", "", &emmc_storage);
+	emmcsn_path_impl(sdPath, "", "", &emmc_storage);
 	gui->base_path = (char *)malloc(strlen(sdPath) + 1);
 	strcpy(gui->base_path, sdPath);
 
 	timer = get_tmr_s();
 	if (dumpType & PART_BOOT)
 	{
-		const u32 BOOT_PART_SIZE = storage.ext_csd.boot_mult << 17;
+		const u32 BOOT_PART_SIZE = emmc_storage.ext_csd.boot_mult << 17;
 
 		emmc_part_t bootPart;
 		memset(&bootPart, 0, sizeof(bootPart));
@@ -810,10 +807,10 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 			lv_label_ins_text(gui->label_log, LV_LABEL_POS_LAST, txt_buf);
 			manual_system_maintenance(true);
 
-			sdmmc_storage_set_mmc_partition(&storage, i + 1);
+			sdmmc_storage_set_mmc_partition(&emmc_storage, i + 1);
 
-			emmcsn_path_impl(sdPath, "", bootPart.name, &storage);
-			res = _dump_emmc_part(gui, sdPath, i, &storage, &bootPart);
+			emmcsn_path_impl(sdPath, "", bootPart.name, &emmc_storage);
+			res = _dump_emmc_part(gui, sdPath, i, &emmc_storage, &bootPart);
 
 			if (!res)
 				s_printf(txt_buf, "#FFDD00 Failed!#\n");
@@ -827,16 +824,16 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 
 	if ((dumpType & PART_SYSTEM) || (dumpType & PART_USER) || (dumpType & PART_RAW))
 	{
-		sdmmc_storage_set_mmc_partition(&storage, EMMC_GPP);
+		sdmmc_storage_set_mmc_partition(&emmc_storage, EMMC_GPP);
 
 		if ((dumpType & PART_SYSTEM) || (dumpType & PART_USER))
 		{
-			emmcsn_path_impl(sdPath, "/partitions", "", &storage);
+			emmcsn_path_impl(sdPath, "/partitions", "", &emmc_storage);
 			gui->base_path = (char *)malloc(strlen(sdPath) + 1);
 			strcpy(gui->base_path, sdPath);
 
 			LIST_INIT(gpt);
-			nx_emmc_gpt_parse(&gpt, &storage);
+			nx_emmc_gpt_parse(&gpt, &emmc_storage);
 			LIST_FOREACH_ENTRY(emmc_part_t, part, &gpt, link)
 			{
 				if ((dumpType & PART_USER) == 0 && !strcmp(part->name, "USER"))
@@ -852,8 +849,8 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 				manual_system_maintenance(true);
 				i++;
 
-				emmcsn_path_impl(sdPath, "/partitions", part->name, &storage);
-				res = _dump_emmc_part(gui, sdPath, 0, &storage, part);
+				emmcsn_path_impl(sdPath, "/partitions", part->name, &emmc_storage);
+				res = _dump_emmc_part(gui, sdPath, 0, &emmc_storage, part);
 				// If a part failed, don't continue.
 				if (!res)
 				{
@@ -873,7 +870,7 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 		if (dumpType & PART_RAW)
 		{
 			// Get GP partition size dynamically.
-			const u32 RAW_AREA_NUM_SECTORS = storage.sec_cnt;
+			const u32 RAW_AREA_NUM_SECTORS = emmc_storage.sec_cnt;
 
 			emmc_part_t rawPart;
 			memset(&rawPart, 0, sizeof(rawPart));
@@ -890,8 +887,8 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 
 				i++;
 
-				emmcsn_path_impl(sdPath, "", rawPart.name, &storage);
-				res = _dump_emmc_part(gui, sdPath, 2, &storage, &rawPart);
+				emmcsn_path_impl(sdPath, "", rawPart.name, &emmc_storage);
+				res = _dump_emmc_part(gui, sdPath, 2, &emmc_storage, &rawPart);
 
 				if (!res)
 					s_printf(txt_buf, "#FFDD00 Failed!#\n");
@@ -905,7 +902,7 @@ void dump_emmc_selected(emmcPartType_t dumpType, emmc_tool_gui_t *gui)
 	}
 
 	timer = get_tmr_s() - timer;
-	sdmmc_storage_end(&storage);
+	sdmmc_storage_end(&emmc_storage);
 
 	if (res && n_cfg.verification && !gui->raw_emummc)
 		s_printf(txt_buf, "Time taken: %dm %ds.\n#96FF00 Finished and verified!#", timer / 60, timer % 60);
@@ -1134,7 +1131,7 @@ static int _restore_emmc_part(emmc_tool_gui_t *gui, char *sd_path, int active_pa
 		_get_valid_partition(&sector_start, &sector_size, &part_idx, false);
 		if (!part_idx || !sector_size)
 		{
-			s_printf(gui->txt_buf, "#FFDD00 Failed to find a partition...#\n");
+			s_printf(gui->txt_buf, "\n#FFDD00 Failed to find a partition...#\n");
 			lv_label_ins_text(gui->label_log, LV_LABEL_POS_LAST, gui->txt_buf);
 			manual_system_maintenance(true);
 
@@ -1161,7 +1158,7 @@ static int _restore_emmc_part(emmc_tool_gui_t *gui, char *sd_path, int active_pa
 				// Verify part.
 				if (_dump_emmc_verify(gui, storage, lbaStartPart, outFilename, part))
 				{
-					s_printf(gui->txt_buf, "#FFDD00 Please try again...#\n");
+					s_printf(gui->txt_buf, "\n#FFDD00 Please try again...#\n");
 					lv_label_ins_text(gui->label_log, LV_LABEL_POS_LAST, gui->txt_buf);
 					manual_system_maintenance(true);
 
@@ -1185,7 +1182,7 @@ static int _restore_emmc_part(emmc_tool_gui_t *gui, char *sd_path, int active_pa
 			res = f_open(&fp, outFilename, FA_READ);
 			if (res)
 			{
-				s_printf(gui->txt_buf, "#FF0000 Error (%d) while opening file#\n#FFDD00 %s!#\n", res, outFilename);
+				s_printf(gui->txt_buf, "\n#FF0000 Error (%d) while opening file#\n#FFDD00 %s!#\n", res, outFilename);
 				lv_label_ins_text(gui->label_log, LV_LABEL_POS_LAST, gui->txt_buf);
 				manual_system_maintenance(true);
 
@@ -1225,8 +1222,8 @@ static int _restore_emmc_part(emmc_tool_gui_t *gui, char *sd_path, int active_pa
 		while (res)
 		{
 			s_printf(gui->txt_buf,
-				"#FFDD00 Error reading %d blocks @ LBA %08X,#\n"
-				"#FFDD00 from eMMC (try %d). #",
+				"\n#FFDD00 Error reading %d blocks @ LBA %08X,#\n"
+				"#FFDD00 from eMMC (try %d).\n#",
 				num, lba_curr, ++retryCount);
 			lv_label_ins_text(gui->label_log, LV_LABEL_POS_LAST, gui->txt_buf);
 			manual_system_maintenance(true);
@@ -1371,9 +1368,7 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 		goto out;
 	}
 
-	sdmmc_storage_t storage;
-	sdmmc_t sdmmc;
-	if (!sdmmc_storage_init_mmc(&storage, &sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
+	if (!sdmmc_storage_init_mmc(&emmc_storage, &emmc_sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
 	{
 		lv_label_set_text(gui->label_info, "#FFDD00 Failed to init eMMC!#");
 		goto out;
@@ -1382,14 +1377,14 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 	int i = 0;
 	char sdPath[OUT_FILENAME_SZ];
 
-	emmcsn_path_impl(sdPath, "/restore", "", &storage);
+	emmcsn_path_impl(sdPath, "/restore", "", &emmc_storage);
 	gui->base_path = (char *)malloc(strlen(sdPath) + 1);
 	strcpy(gui->base_path, sdPath);
 
 	timer = get_tmr_s();
 	if (restoreType & PART_BOOT)
 	{
-		const u32 BOOT_PART_SIZE = storage.ext_csd.boot_mult << 17;
+		const u32 BOOT_PART_SIZE = emmc_storage.ext_csd.boot_mult << 17;
 
 		emmc_part_t bootPart;
 		memset(&bootPart, 0, sizeof(bootPart));
@@ -1408,10 +1403,10 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 			lv_label_ins_text(gui->label_log, LV_LABEL_POS_LAST, txt_buf);
 			manual_system_maintenance(true);
 
-			sdmmc_storage_set_mmc_partition(&storage, i + 1);
+			sdmmc_storage_set_mmc_partition(&emmc_storage, i + 1);
 
-			emmcsn_path_impl(sdPath, "/restore", bootPart.name, &storage);
-			res = _restore_emmc_part(gui, sdPath, i, &storage, &bootPart, false);
+			emmcsn_path_impl(sdPath, "/restore", bootPart.name, &emmc_storage);
+			res = _restore_emmc_part(gui, sdPath, i, &emmc_storage, &bootPart, false);
 
 			if (!res)
 				s_printf(txt_buf, "#FFDD00 Failed!#\n");
@@ -1425,14 +1420,14 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 
 	if (restoreType & PART_GP_ALL)
 	{
-		emmcsn_path_impl(sdPath, "/restore/partitions", "", &storage);
+		emmcsn_path_impl(sdPath, "/restore/partitions", "", &emmc_storage);
 		gui->base_path = (char *)malloc(strlen(sdPath) + 1);
 		strcpy(gui->base_path, sdPath);
 
-		sdmmc_storage_set_mmc_partition(&storage, EMMC_GPP);
+		sdmmc_storage_set_mmc_partition(&emmc_storage, EMMC_GPP);
 
 		LIST_INIT(gpt);
-		nx_emmc_gpt_parse(&gpt, &storage);
+		nx_emmc_gpt_parse(&gpt, &emmc_storage);
 		LIST_FOREACH_ENTRY(emmc_part_t, part, &gpt, link)
 		{
 			s_printf(txt_buf, "#00DDFF %02d: %s#\n#00DDFF Range: 0x%08X - 0x%08X#\n\n\n\n\n",
@@ -1443,8 +1438,8 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 			manual_system_maintenance(true);
 			i++;
 
-			emmcsn_path_impl(sdPath, "/restore/partitions", part->name, &storage);
-			res = _restore_emmc_part(gui, sdPath, 0, &storage, part, false);
+			emmcsn_path_impl(sdPath, "/restore/partitions", part->name, &emmc_storage);
+			res = _restore_emmc_part(gui, sdPath, 0, &emmc_storage, part, false);
 
 			if (!res)
 				s_printf(txt_buf, "#FFDD00 Failed!#\n");
@@ -1460,7 +1455,7 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 	if (restoreType & PART_RAW)
 	{
 		// Get GP partition size dynamically.
-		const u32 RAW_AREA_NUM_SECTORS = storage.sec_cnt;
+		const u32 RAW_AREA_NUM_SECTORS = emmc_storage.sec_cnt;
 
 		emmc_part_t rawPart;
 		memset(&rawPart, 0, sizeof(rawPart));
@@ -1476,8 +1471,8 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 			manual_system_maintenance(true);
 			i++;
 
-			emmcsn_path_impl(sdPath, "/restore", rawPart.name, &storage);
-			res = _restore_emmc_part(gui, sdPath, 2, &storage, &rawPart, true);
+			emmcsn_path_impl(sdPath, "/restore", rawPart.name, &emmc_storage);
+			res = _restore_emmc_part(gui, sdPath, 2, &emmc_storage, &rawPart, true);
 
 			if (!res)
 				s_printf(txt_buf, "#FFDD00 Failed!#\n");
@@ -1490,7 +1485,7 @@ void restore_emmc_selected(emmcPartType_t restoreType, emmc_tool_gui_t *gui)
 	}
 
 	timer = get_tmr_s() - timer;
-	sdmmc_storage_end(&storage);
+	sdmmc_storage_end(&emmc_storage);
 
 	if (res && n_cfg.verification && !gui->raw_emummc)
 		s_printf(txt_buf, "Time taken: %dm %ds.\n#96FF00 Finished and verified!#", timer / 60, timer % 60);

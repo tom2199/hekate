@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 CTCaer
+ * Copyright (c) 2018-2021 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -1139,9 +1139,9 @@ static void _create_tab_about(lv_theme_t * th, lv_obj_t * parent)
 	lv_label_set_recolor(lbl_credits, true);
 	lv_label_set_static_text(lbl_credits,
 		"#C7EA46 hekate#  (c) 2018,      #C7EA46 naehrwert#, #C7EA46 st4rk#\n"
-		"        (c) 2018-2020, #C7EA46 CTCaer#\n"
+		"        (c) 2018-2021, #C7EA46 CTCaer#\n"
 		"\n"
-		"#C7EA46 Nyx GUI# (c) 2019-2020, #C7EA46 CTCaer#\n"
+		"#C7EA46 Nyx GUI# (c) 2019-2021, #C7EA46 CTCaer#\n"
 		"\n"
 		"Thanks to: #00CCFF derrek, nedwill, plutoo, #\n"
 		"           #00CCFF shuffle2, smea, thexyz, yellows8 #\n"
@@ -1755,14 +1755,14 @@ ini_parsing:
 		{
 			lv_label_set_static_text(label_error,
 				"#FFDD00 No main boot entries found...#\n"
-				"You can use the following entry to boot stock,\n"
+				"Check that #96FF00 bootloader/hekate_ipl.ini# has boot entries\n"
 				"or use #C7EA46 More configs# button for more boot entries.");
 		}
 		else
 		{
 			lv_label_set_static_text(label_error,
 				"#FFDD00 No .ini or boot entries found...#\n"
-				"Check that a .ini file exists in #96FF00 /bootloader/ini/#,\n"
+				"Check that a .ini file exists in #96FF00 bootloader/ini/#\n"
 				"and that it contains at least one entry.");
 		}
 
@@ -2206,17 +2206,25 @@ static void _nyx_main_menu(lv_theme_t * th)
 	lv_tabview_set_tab_load_action(tv, _show_hide_save_button);
 
 	// If we rebooted to run sept for dumping, lunch dump immediately.
-	if (nyx_str->cfg & NYX_CFG_DUMP)
+	if (nyx_str->cfg & NYX_CFG_SEPT)
 	{
-		nyx_str->cfg &= ~(NYX_CFG_DUMP);
-		lv_task_t *task_run_dump = lv_task_create(sept_run_dump, LV_TASK_ONESHOT, LV_TASK_PRIO_MID, NULL);
-		lv_task_once(task_run_dump);
-	}
-	else if (nyx_str->cfg & NYX_CFG_BIS)
-	{
-		nyx_str->cfg &= ~(NYX_CFG_BIS);
-		lv_task_t *task_run_cal0 = lv_task_create(sept_run_cal0, LV_TASK_ONESHOT, LV_TASK_PRIO_LOWEST, NULL);
-		lv_task_once(task_run_cal0);
+		u32 type = nyx_str->cfg >> 24;
+		nyx_str->cfg &= ~(NYX_CFG_SEPT | NYX_CFG_EXTRA);
+
+		if (type == NYX_SEPT_DUMP)
+		{
+			lv_task_t *task_run_dump = lv_task_create(sept_run_dump, LV_TASK_ONESHOT, LV_TASK_PRIO_MID, NULL);
+			lv_task_once(task_run_dump);
+		}
+		else if (type == NYX_SEPT_CAL0)
+		{
+			lv_task_t *task_run_cal0 = lv_task_create(sept_run_cal0, LV_TASK_ONESHOT, LV_TASK_PRIO_LOWEST, NULL);
+			lv_task_once(task_run_cal0);
+		}
+		else if (type == NYX_SEPT_EMUF)
+		{
+			// TODO: Maybe automatically relaunch emuMMC creation in the future.
+		}
 	}
 	else if (nyx_str->cfg & NYX_CFG_UMS)
 	{

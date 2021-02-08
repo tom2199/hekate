@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 naehrwert
  *
- * Copyright (c) 2018-2020 CTCaer
+ * Copyright (c) 2018-2021 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -73,8 +73,6 @@ volatile nyx_storage_t *nyx_str = (nyx_storage_t *)NYX_STORAGE_ADDR;
 
 void emmcsn_path_impl(char *path, char *sub_dir, char *filename, sdmmc_storage_t *storage)
 {
-	sdmmc_storage_t storage2;
-	sdmmc_t sdmmc;
 	char emmcSN[9];
 	bool init_done = false;
 
@@ -83,12 +81,12 @@ void emmcsn_path_impl(char *path, char *sub_dir, char *filename, sdmmc_storage_t
 
 	if (!storage)
 	{
-		if (!sdmmc_storage_init_mmc(&storage2, &sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
+		if (!sdmmc_storage_init_mmc(&emmc_storage, &emmc_sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
 			memcpy(emmcSN, "00000000", 9);
 		else
 		{
 			init_done = true;
-			itoa(storage2.cid.serial, emmcSN, 16);
+			itoa(emmc_storage.cid.serial, emmcSN, 16);
 		}
 	}
 	else
@@ -107,7 +105,7 @@ void emmcsn_path_impl(char *path, char *sub_dir, char *filename, sdmmc_storage_t
 	memcpy(path + strlen(path), filename, filename_len + 1);
 
 	if (init_done)
-		sdmmc_storage_end(&storage2);
+		sdmmc_storage_end(&emmc_storage);
 }
 
 void check_power_off_from_hos()
@@ -644,12 +642,8 @@ void launch_firmware()
 
 	if (!cfg_sec)
 	{
-		gfx_puts("\nUsing default launch configuration...\n");
-		gfx_puts("\nPress POWER to Continue.\nPress VOL to go to the menu.");
-
-		u32 btn = btn_wait();
-		if (!(btn & BTN_POWER))
-			goto out;
+		gfx_printf("\nPress any key...\n");
+		goto out;
 	}
 
 	if (payload_path)
@@ -720,15 +714,11 @@ void nyx_load_run()
 	nyx_str->cfg = 0;
 	if (b_cfg.extra_cfg)
 	{
-		if (b_cfg.extra_cfg & EXTRA_CFG_NYX_DUMP)
+		if (b_cfg.extra_cfg & EXTRA_CFG_NYX_SEPT)
 		{
-			b_cfg.extra_cfg &= ~(EXTRA_CFG_NYX_DUMP);
-			nyx_str->cfg |= NYX_CFG_DUMP;
-		}
-		if (b_cfg.extra_cfg & EXTRA_CFG_NYX_BIS)
-		{
-			b_cfg.extra_cfg &= ~(EXTRA_CFG_NYX_BIS);
-			nyx_str->cfg |= NYX_CFG_BIS;
+			b_cfg.extra_cfg &= ~(EXTRA_CFG_NYX_SEPT);
+			nyx_str->cfg |= NYX_CFG_SEPT;
+			nyx_str->cfg |= b_cfg.sept << 24;
 		}
 		if (b_cfg.extra_cfg & EXTRA_CFG_NYX_UMS)
 		{
@@ -808,7 +798,7 @@ static void _bootloader_corruption_protect()
 
 static void _auto_launch_firmware()
 {
-	if(b_cfg.extra_cfg & (EXTRA_CFG_NYX_DUMP | EXTRA_CFG_NYX_BIS))
+	if(b_cfg.extra_cfg & EXTRA_CFG_NYX_SEPT)
 	{
 		if (!h_cfg.sept_run)
 			EMC(EMC_SCRATCH0) |= EMC_HEKA_UPD;
@@ -1120,18 +1110,15 @@ out:
 
 static void _patched_rcm_protection()
 {
-	sdmmc_storage_t storage;
-	sdmmc_t sdmmc;
-
 	if (!h_cfg.rcm_patched || hw_get_chip_id() == GP_HIDREV_MAJOR_T210B01)
 		return;
 
 	// Check if AutoRCM is enabled and protect from a permanent brick.
-	if (!sdmmc_storage_init_mmc(&storage, &sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
+	if (!sdmmc_storage_init_mmc(&emmc_storage, &emmc_sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
 		return;
 
 	u8 *buf = (u8 *)malloc(0x200);
-	sdmmc_storage_set_mmc_partition(&storage, EMMC_BOOT0);
+	sdmmc_storage_set_mmc_partition(&emmc_storage, EMMC_BOOT0);
 
 	u32 sector;
 	u8 corr_mod0, mod1;
@@ -1143,7 +1130,7 @@ static void _patched_rcm_protection()
 	for (u32 i = 0; i < 4; i++)
 	{
 		sector = 1 + (32 * i); // 0x4000 bct + 0x200 offset.
-		sdmmc_storage_read(&storage, sector, 1, buf);
+		sdmmc_storage_read(&emmc_storage, sector, 1, buf);
 
 		// Check if 2nd byte of modulus is correct.
 		if (buf[0x11] != mod1)
@@ -1154,12 +1141,12 @@ static void _patched_rcm_protection()
 		{
 			buf[0x10] = corr_mod0;
 
-			sdmmc_storage_write(&storage, sector, 1, buf);
+			sdmmc_storage_write(&emmc_storage, sector, 1, buf);
 		}
 	}
 
 	free(buf);
-	sdmmc_storage_end(&storage);
+	sdmmc_storage_end(&emmc_storage);
 }
 
 #define EXCP_EN_ADDR   0x4003FFFC
@@ -1521,7 +1508,7 @@ ment_t ment_top[] = {
 	MDEF_END()
 };
 
-menu_t menu_top = { ment_top, "hekate - CTCaer mod v5.5.3", 0, 0 };
+menu_t menu_top = { ment_top, "hekate - CTCaer mod v5.5.4", 0, 0 };
 
 extern void pivot_stack(u32 stack_top);
 
